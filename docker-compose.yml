@@ -1,0 +1,35 @@
+version: '3'
+services:
+  es:
+    build:
+      context: .
+      dockerfile: Dockerfile-es
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    networks:
+      - es2lab
+  lab:
+    build:
+      context: .
+      dockerfile: Dockerfile-lab
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    volumes:
+      - ./source:/home/jovyan/source
+    command: start-notebook.sh --NotebookApp.token=''
+    networks:
+      - es2lab
+networks:
+  es2lab:
+    driver: bridge
+volumes:
+  esdata:
+    driver: local
