@@ -2,14 +2,16 @@ import os, datetime, math, h5py
 import numpy as np
 
 class Tile:
-    def __init__(self, hdf5path):
+    # support level: L2
+    # support file: LST, AGB, LAI, VGI, CLFG, CLPR, ARNP, ARPLK
+    def __init__(self, hdf5path, product = None):
         self.granule_id = os.path.splitext(os.path.basename(hdf5path))[0]
         self.observation_date = datetime.datetime(int(self.granule_id[7:11]), int(self.granule_id[11:13]), int(self.granule_id[13:15]), tzinfo=datetime.timezone.utc)
         self.nodata_value = np.NaN
 
         self.vtile = int(self.granule_id[21:23])
         self.htile = int(self.granule_id[23:25])
-        self.product = self.granule_id[31:35].replace('_', '')
+        self.product = self.granule_id[31:35].replace('_', '') if product == None else product
         self.resolution = self.granule_id[35]
 
         with h5py.File(hdf5path, 'r') as f:
@@ -42,22 +44,30 @@ class Tile:
 
             self.lines = int(f['Image_data'].attrs['Number_of_lines'][0])
             self.pixels = int(f['Image_data'].attrs['Number_of_pixels'][0])
-            self.qa_flags = f['Image_data']['QA_flag'][:]
-            self.qa_description = f['Image_data']['QA_flag'].attrs['Data_description'][0].decode()
             self.grid_interval_num = f['Image_data'].attrs['Grid_interval'][0]
-            
-            obs_time = f['Geometry_data']['Obs_time'][:].astype(np.float64)
-            obs_time_offset = f['Geometry_data']['Obs_time'].attrs['Offset'][0]
-            obs_time_slope = f['Geometry_data']['Obs_time'].attrs['Slope'][0]
-            obs_time_error_dn = f['Geometry_data']['Obs_time'].attrs['Error_DN'][0]
-            obs_time_min_valid_dn = f['Geometry_data']['Obs_time'].attrs['Minimum_valid_DN'][0]
-            obs_time_max_valid_dn = f['Geometry_data']['Obs_time'].attrs['Maximum_valid_DN'][0]
 
-            with np.errstate(invalid='ignore'):    
-                obs_time[obs_time == obs_time_error_dn] = self.nodata_value
-                obs_time[(obs_time < obs_time_min_valid_dn) | (obs_time > obs_time_max_valid_dn)] = self.nodata_value
-                obs_time = obs_time_slope * obs_time + obs_time_offset
-            self.obs_time = obs_time * 3600.0 + np.ones((self.lines,self.pixels), dtype="float64") * self.observation_date.timestamp()
+            try:
+                self.qa_flags = f['Image_data']['QA_flag'][:]
+                self.qa_description = f['Image_data']['QA_flag'].attrs['Data_description'][0].decode()
+            except:
+                self.qa_flags = None
+                self.qa_description = None
+            
+            try:
+                obs_time = f['Geometry_data']['Obs_time'][:].astype(np.float64)
+                obs_time_offset = f['Geometry_data']['Obs_time'].attrs['Offset'][0]
+                obs_time_slope = f['Geometry_data']['Obs_time'].attrs['Slope'][0]
+                obs_time_error_dn = f['Geometry_data']['Obs_time'].attrs['Error_DN'][0]
+                obs_time_min_valid_dn = f['Geometry_data']['Obs_time'].attrs['Minimum_valid_DN'][0]
+                obs_time_max_valid_dn = f['Geometry_data']['Obs_time'].attrs['Maximum_valid_DN'][0]
+
+                with np.errstate(invalid='ignore'):    
+                    obs_time[obs_time == obs_time_error_dn] = self.nodata_value
+                    obs_time[(obs_time < obs_time_min_valid_dn) | (obs_time > obs_time_max_valid_dn)] = self.nodata_value
+                    obs_time = obs_time_slope * obs_time + obs_time_offset
+                self.obs_time = obs_time * 3600.0 + np.ones((self.lines, self.pixels), dtype="float64") * self.observation_date.timestamp()
+            except:
+                self.obs_time = None
 
     def is_good(self):
         return self.status == 'Good'
@@ -67,10 +77,13 @@ class Tile:
         if np.isnan(value):
             raise Exception('error value.')
 
-        obs_time = self.obs_time[line, pixel]
-        if np.isnan(obs_time):
-            raise Exception('error obs_time.')
-        observation_datetime = datetime.datetime.fromtimestamp(obs_time, datetime.timezone.utc)
+        try:
+            obs_time = self.obs_time[line, pixel]
+            if np.isnan(obs_time):
+                raise Exception
+            observation_datetime = datetime.datetime.fromtimestamp(obs_time, datetime.timezone.utc)
+        except:
+            observation_datetime = None
         
         vtile_num = 18
         v_pixel = int(self.lines * vtile_num)
@@ -84,8 +97,11 @@ class Tile:
         NPi = int(round(NP0 * math.cos(math.radians(lat)), 0))
         lon = 360 / NPi * (col_total - NP0 / 2 + 0.5)
         
-        qa_flag = int(self.qa_flags[line, pixel])
-        qa_flags = [i for i, qa in enumerate(reversed(format(qa_flag, 'b'))) if int(qa) == 1]
+        try:
+            qa_flag = int(self.qa_flags[line, pixel])
+            qa_flags = [i for i, qa in enumerate(reversed(format(qa_flag, 'b'))) if int(qa) == 1]
+        except:
+            qa_flags = None
 
         return {
             'location': [lon, lat],
