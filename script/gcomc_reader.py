@@ -1,4 +1,4 @@
-import os, re, datetime, math, h5py
+import os, datetime, math, h5py
 import numpy as np
 
 class Tile:
