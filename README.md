@@ -1,10 +1,10 @@
 
 # GCOM-C point
-GCOM-Cの観測データを時空間データとしてElasticsearchに入れる。
+GCOM-Cの観測データを時空間データとしてElasticsearchに入れるサンプル
 
 ## 対象
 * L2陸域
-* L2海洋(予定)
+* L2海洋
 
 ## 実行
 1. 対象ファイルをsourceにダウンロード
@@ -14,3 +14,5 @@ GCOM-Cの観測データを時空間データとしてElasticsearchに入れる�
 1. work配下のノートブックを実行
 1. 終わったら`docker-compose down`
 
+## ライセンス
+自由に改変して利用してください。
